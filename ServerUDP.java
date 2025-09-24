@@ -13,14 +13,14 @@ import java.util.zip.CRC32;
 public class ServerUDP {
     private static final int PORT = 8080;
     private static final int PAYLOAD = 1024;
-    private static final int HEADER_LENGTH = 4 + 8 + 1;
+    private static final int HEADER_LENGTH = 4 + 4 + 8 + 1;
     private static final int PACKET_LENGTH = HEADER_LENGTH + PAYLOAD;
     public static void main(String[] args) {
 
         try(DatagramSocket serverSocket = new DatagramSocket(PORT)) {
             while(true) {
 
-                byte[] buffer = new byte[1024]; // array simples
+                byte[] buffer = new byte[1024];
                 DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
                 serverSocket.receive(receivePacket);
 
@@ -47,7 +47,7 @@ public class ServerUDP {
         }
     }
     private static void sendArchive(File archive, InetAddress address, int clientPort, DatagramSocket serverSocket) throws IOException {
-        try(FileInputStream fis = new FileInputStream(archive);){
+        try (FileInputStream fis = new FileInputStream(archive)) {
             byte[] bufferData = new byte[PAYLOAD];
             int sequenceNumber = 0;
             int bytesRead;
@@ -57,8 +57,10 @@ public class ServerUDP {
                 crc32.update(bufferData, 0, bytesRead);
                 long checksum = crc32.getValue();
 
-                ByteBuffer packetBuffer = ByteBuffer.allocate(HEADER_LENGTH + PAYLOAD);
+
+                ByteBuffer packetBuffer = ByteBuffer.allocate(HEADER_LENGTH + bytesRead);
                 packetBuffer.putInt(sequenceNumber);
+                packetBuffer.putInt(bytesRead);
                 packetBuffer.putLong(checksum);
 
                 boolean lastPacket = (fis.available() == 0);
@@ -67,11 +69,10 @@ public class ServerUDP {
                 packetBuffer.put(bufferData, 0, bytesRead);
 
                 byte[] UDPpackage = packetBuffer.array();
-
                 DatagramPacket sendPacket = new DatagramPacket(UDPpackage, UDPpackage.length, address, clientPort);
                 serverSocket.send(sendPacket);
 
-                System.out.println("Enviado pacote #" + sequenceNumber + " com " + bytesRead + " bytes.");
+                System.out.println("Enviado pacote #" + sequenceNumber + " com " + bytesRead + " bytes de dados.");
                 sequenceNumber++;
 
                 try {

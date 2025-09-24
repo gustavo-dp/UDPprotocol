@@ -1,33 +1,90 @@
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.util.TreeMap;
+import java.util.zip.CRC32;
 
 public class Cliente {
+    private static final int PAYLOAD = 1024;
+    private static final int HEADER = 4 + 4 + 8 + 1;
+    private static final int PACKAGE_LENGTH = HEADER + PAYLOAD;
     public static void main(String[] args)  {
-        try (DatagramSocket socket = new DatagramSocket()) {
-            String sendMessage = new  String("YOOOOOO");
-            ByteBuffer sendBuffer = ByteBuffer.wrap(sendMessage.getBytes());
+        String archiveName = "/home/deda/College/class_redes_de_computadores/firstProject_udp/teste.txt";
+        String archiveSaved = "recebido_" + new File(archiveName).getName();
+
+        try(DatagramSocket socket = new DatagramSocket()) {
+            InetAddress inet = InetAddress.getByName("localhost");
             int port = 8080;
+            String request = "GET /" + archiveName;
+            byte[] sendBuffer = request.getBytes();
+            DatagramPacket packet = new DatagramPacket(sendBuffer, sendBuffer.length, inet, port);
+            socket.send(packet);
 
-            InetAddress serverAddress = InetAddress.getByName("localhost");
-            DatagramPacket sendPacket = new DatagramPacket(sendBuffer.array(), sendBuffer.array().length, serverAddress, port);
+            TreeMap<Integer, byte[]> segmentsReceived = new TreeMap<>();
+            int lastNumberByte = -1;
 
-            socket.send(sendPacket);
+            socket.setSoTimeout(2000);
 
-            ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
+            System.out.println("Aguardando pacotes do servidor...");
+            while (true) {
+                try {
 
-            DatagramPacket receivePacket = new DatagramPacket(receiveBuffer.array(), receiveBuffer.array().length);
+                    byte[] receiveBuffer = new byte[PACKAGE_LENGTH];
+                    DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+                    socket.receive(receivePacket);
 
-            socket.receive(receivePacket);
-            String receiveText = new String(receivePacket.getData(), 0, receivePacket.getLength());
-            System.out.println(new String(receivePacket.getData(), 0, receivePacket.getLength()));
+                    ByteBuffer receiveBufferPacket = ByteBuffer.wrap(receivePacket.getData());
+                    int sequenceNumber = receiveBufferPacket.getInt();
+                    int dataLength = receiveBufferPacket.getInt();
+                    long checksum = receiveBufferPacket.getLong();
+                    byte flag = receiveBufferPacket.get();
 
-        }catch (Exception e){
+
+                    byte[] data = new byte[dataLength];
+                    receiveBufferPacket.get(data);
+
+                    CRC32 crc32 = new CRC32();
+                    crc32.update(data, 0, dataLength);
+                    long checksumValue = crc32.getValue();
+
+                    if (checksumValue == checksum) {
+                        segmentsReceived.put(sequenceNumber, data);
+                        System.out.println("Pacote #" + sequenceNumber + " recebido e validado.");
+
+                        if (flag == 1) {
+                            lastNumberByte = sequenceNumber;
+                        }
+                    } else {
+                        System.out.println("Pacote #" + sequenceNumber + " corrompido e descartado!");
+                    }
+
+                } catch (SocketTimeoutException e) {
+                    System.out.println("Timeout! O servidor provavelmente terminou de enviar.");
+                    break;
+                }
+            }
+            if(lastNumberByte != -1 && segmentsReceived.size() == lastNumberByte + 1){
+                System.out.println("Todos os pacotes recebidos com sucesso! Montando o arquivo...");
+                try(FileOutputStream fos = new FileOutputStream(archiveSaved)) {
+                    for(byte[] segment : segmentsReceived.values()){
+                        fos.write(segment);
+                    }
+                    System.out.println("Arquivo '" + archiveSaved + "' salvo com sucesso!");
+                }
+            }else{
+                System.out.println("Falha na transferência: Pacotes faltando ou corrompidos.");
+                System.out.println("Recebidos " + segmentsReceived.size() + " pacotes, mas o último era #" + lastNumberByte);
+
+            }
+        }catch (IOException e) {
             e.printStackTrace();
         }
+
+
     }
 }
