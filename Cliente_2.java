@@ -7,7 +7,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.CRC32;
 
-public class Cliente {
+public class Cliente_2 {
 
     private static final int PAYLOAD = 1024;
     private static final int HEADER_LENGTH = 4 + 4 + 8 + 1;
@@ -25,7 +25,7 @@ public class Cliente {
             System.out.print("Deseja simular a perda de pacotes? (s/n): ");
             String respostaSimulacao = scanner.nextLine();
             boolean simularPerda = respostaSimulacao.trim().toLowerCase().startsWith("s");
-            String archiveName = "apostia.pdf";
+            String archiveName = "apostila.pdf";
             String archiveSaved = "recebido_" + new File(archiveName).getName();
 
             try (DatagramSocket socket = new DatagramSocket()) {
